@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video and Survey</title>
+  <title>Video Awareness Survey</title>
 
   <style>
     body {
@@ -28,6 +28,7 @@
       width: 100%;
       aspect-ratio: 16 / 9;
       margin: 20px 0;
+      background: black;
     }
 
     #player {
@@ -35,19 +36,26 @@
       height: 100%;
     }
 
+    #status {
+      color: #555;
+      font-size: 14px;
+    }
+
     .button {
       display: inline-block;
       background: #1769e0;
       color: white;
       padding: 12px 20px;
+      border: none;
       border-radius: 6px;
       text-decoration: none;
-      margin-top: 12px;
+      cursor: pointer;
+      margin: 8px;
+      font-size: 15px;
     }
 
-    #status {
-      color: #555;
-      font-size: 14px;
+    .button[hidden] {
+      display: none;
     }
   </style>
 </head>
@@ -55,45 +63,56 @@
 <body>
   <div class="container">
     <h1>Watch the Video</h1>
-    <p>Please watch the entire video. You will be
-       redirected to the survey when it finishes.</p>
+
+    <p>
+      Please watch the entire video.
+      You will be redirected to the survey when it finishes.
+    </p>
 
     <div class="video">
       <div id="player"></div>
     </div>
 
-    <p id="status">Press Play to begin.</p>
+    <p id="status">Loading video...</p>
 
-    <a id="surveyLink"
-       class="button"
-       href="#"
-       target="_blank"
-       rel="noopener noreferrer">
-      Open Survey Manually
+    <button id="startButton" class="button" hidden>
+      Start Video
+    </button>
+
+    <a id="surveyLink" class="button" href="#" hidden>
+      Open Survey
     </a>
   </div>
 
   <script>
-    // REPLACE THESE VALUES
+    // Replace these values
     const VIDEO_ID = "AsYi-MZeX6M";
     const FORM_URL = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=HFv4cHjEkEOjr9j_PUzWOWxqva-6j9xOoZgzFkXAuSdUMUdaODk1QTI1WjFCM1lHVUhNVDNRSDRSSS4u";
 
-    document.getElementById("surveyLink").href = FORM_URL;
+    let player;
+    let finished = false;
 
-    // Load YouTube's embedded player API
+    const status = document.getElementById("status");
+    const startButton = document.getElementById("startButton");
+    const surveyLink = document.getElementById("surveyLink");
+
+    surveyLink.href = FORM_URL;
+
+    // Load YouTube's official player API
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
 
-    let player;
-
+    // Initialize player
     function onYouTubeIframeAPIReady() {
       player = new YT.Player("player", {
         videoId: VIDEO_ID,
 
+        // Start with the original working settings
         playerVars: {
           playsinline: 1,
-          rel: 0
+          rel: 0,
+          autoplay: 1
         },
 
         events: {
@@ -104,29 +123,87 @@
       });
     }
 
-    function onPlayerReady() {
-      document.getElementById("status").textContent =
-        "Ready! Press Play to start the video.";
+    // Attempt muted autoplay
+    function onPlayerReady(event) {
+      event.target.mute();
+      event.target.playVideo();
+
+      status.textContent = "Attempting to start video...";
+
+      // Offer manual playback if autoplay is blocked
+      setTimeout(() => {
+        if (
+          !finished &&
+          player &&
+          player.getPlayerState() !== YT.PlayerState.PLAYING
+        ) {
+          startButton.hidden = false;
+          status.textContent =
+            "If the video does not start, press Start Video.";
+        }
+      }, 3000);
     }
 
+    // Manual fallback for browsers that block autoplay
+    startButton.addEventListener("click", () => {
+      if (!player || finished) return;
+
+      startButton.hidden = true;
+      player.mute();
+      player.playVideo();
+
+      status.textContent = "Starting video...";
+    });
+
+    // Monitor playback
     function onPlayerStateChange(event) {
+      if (finished) return;
+
       if (event.data === YT.PlayerState.PLAYING) {
-        document.getElementById("status").textContent =
-          "Video playing. The survey opens when it ends.";
+        startButton.hidden = true;
+        status.textContent =
+          "Video playing. Please watch until the end.";
+      }
+
+      if (event.data === YT.PlayerState.BUFFERING) {
+        status.textContent = "Buffering video...";
+      }
+
+      if (event.data === YT.PlayerState.PAUSED) {
+        status.textContent =
+          "Video paused. Resume playback to continue.";
       }
 
       if (event.data === YT.PlayerState.ENDED) {
-        document.getElementById("status").textContent =
-          "Video finished! Opening your survey...";
-
-        window.location.href = FORM_URL;
+        finishVideo();
       }
     }
 
-    function onPlayerError() {
-      document.getElementById("status").textContent =
-        "The video could not be played. Please check the video settings.";
+    // Redirect only when YouTube reports playback ended
+        
+    function finishVideo() {
+      if (finished) return;
+
+      finished = true;
+      startButton.hidden = true;
+
+      status.textContent =
+        "Video completed! Opening the survey...";
+
+      // Keep the redirect button hidden initially.
+      surveyLink.hidden = true;
+
+      // Attempt automatic redirect first.
+      window.location.href = FORM_URL;
+
+      // Fallback: show the button if the page is still here.
+      setTimeout(() => {
+        surveyLink.hidden = false;
+        status.textContent =
+          "If you were not redirected, click below to open the survey.";
+      }, 2000);
     }
+
   </script>
 </body>
 </html>
