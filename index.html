@@ -4,19 +4,17 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video Awareness Survey</title>
+  <title>Video and Survey</title>
 
   <style>
-    * { box-sizing: border-box; }
-
     body {
       font-family: Arial, sans-serif;
       max-width: 850px;
       margin: 40px auto;
       padding: 20px;
+      text-align: center;
       background: #f5f7fa;
       color: #222;
-      text-align: center;
     }
 
     .container {
@@ -30,7 +28,6 @@
       width: 100%;
       aspect-ratio: 16 / 9;
       margin: 20px 0;
-      background: #000;
     }
 
     #player {
@@ -38,30 +35,19 @@
       height: 100%;
     }
 
-    #status {
-      color: #555;
-      line-height: 1.5;
-    }
-
-    button, .button {
+    .button {
       display: inline-block;
       background: #1769e0;
       color: white;
       padding: 12px 20px;
-      border: none;
       border-radius: 6px;
       text-decoration: none;
-      font-size: 15px;
-      cursor: pointer;
-      margin: 8px;
+      margin-top: 12px;
     }
 
-    button:hover, .button:hover {
-      background: #0d50b5;
-    }
-
-    [hidden] {
-      display: none !important;
+    #status {
+      color: #555;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -69,147 +55,77 @@
 <body>
   <div class="container">
     <h1>Watch the Video</h1>
-
-    <p>
-      Please watch the entire video.
-      The survey will open when playback finishes.
-    </p>
+    <p>Please watch the entire video. You will be
+       redirected to the survey when it finishes.</p>
 
     <div class="video">
       <div id="player"></div>
     </div>
 
-    <p id="status" role="status" aria-live="polite">
-      Loading video...
-    </p>
+    <p id="status">Press Play to begin.</p>
 
-    <button id="startButton" hidden>
-      Start Video
-    </button>
-
-    <a id="surveyLink" class="button" href="#" hidden>
-      Continue to Survey
+    <a id="surveyLink"
+       class="button"
+       href="#"
+       target="_blank"
+       rel="noopener noreferrer">
+      Open Survey Manually
     </a>
   </div>
 
   <script>
-    // ===== CONFIGURATION =====
+    // REPLACE THESE VALUES
     const VIDEO_ID = "AsYi-MZeX6M";
     const FORM_URL = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=HFv4cHjEkEOjr9j_PUzWOWxqva-6j9xOoZgzFkXAuSdUMUdaODk1QTI1WjFCM1lHVUhNVDNRSDRSSS4u";
 
+    document.getElementById("surveyLink").href = FORM_URL;
+
+    // Load YouTube's embedded player API
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+
     let player;
-    let finished = false;
-    let redirectTimer = null;
 
-    const status = document.getElementById("status");
-    const startButton = document.getElementById("startButton");
-    const surveyLink = document.getElementById("surveyLink");
-
-    surveyLink.href = FORM_URL;
-
-    // Load the official YouTube player API.
-    const script = document.createElement("script");
-    script.src = "https://www.youtube.com/iframe_api";
-    document.head.appendChild(script);
-
-    // YouTube calls this function when its API is ready.
     function onYouTubeIframeAPIReady() {
       player = new YT.Player("player", {
         videoId: VIDEO_ID,
 
         playerVars: {
-          autoplay: 1,
-          controls: 0,
-          disablekb: 1,
-          fs: 0,
           playsinline: 1,
           rel: 0
         },
 
         events: {
-          onReady: handleReady,
-          onStateChange: handleStateChange,
-          onError: handleError
+          onReady: onPlayerReady,
+          onStateChange: onPlayerStateChange,
+          onError: onPlayerError
         }
       });
     }
 
-    function handleReady(event) {
-      // Muted autoplay is more likely to be permitted.
-      event.target.mute();
-      event.target.playVideo();
-
-      status.textContent =
-        "Attempting to start video...";
-
-      // Offer a manual fallback if playback doesn't start.
-      setTimeout(() => {
-        if (!finished &&
-            player &&
-            player.getPlayerState() !== YT.PlayerState.PLAYING) {
-          startButton.hidden = false;
-          status.textContent =
-            "If the video did not start, press Start Video.";
-        }
-      }, 2500);
+    function onPlayerReady() {
+      document.getElementById("status").textContent =
+        "Ready! Press Play to start the video.";
     }
 
-    startButton.addEventListener("click", () => {
-      if (!player || finished) return;
-
-      startButton.hidden = true;
-      player.playVideo();
-
-      status.textContent = "Starting video...";
-    });
-
-    function handleStateChange(event) {
-      if (finished) return;
-
+    function onPlayerStateChange(event) {
       if (event.data === YT.PlayerState.PLAYING) {
-        startButton.hidden = true;
-        status.textContent =
-          "Video playing. Please watch until the end.";
-      }
-
-      if (event.data === YT.PlayerState.BUFFERING) {
-        status.textContent = "Buffering video...";
-      }
-
-      if (event.data === YT.PlayerState.PAUSED) {
-        status.textContent =
-          "Video paused. Resume playback to continue.";
+        document.getElementById("status").textContent =
+          "Video playing. The survey opens when it ends.";
       }
 
       if (event.data === YT.PlayerState.ENDED) {
-        finishVideo();
+        document.getElementById("status").textContent =
+          "Video finished! Opening your survey...";
+
+        window.location.href = FORM_URL;
       }
     }
 
-    function finishVideo() {
-      if (finished) return;
-
-      finished = true;
-      startButton.hidden = true;
-      surveyLink.hidden = false;
-
-      status.textContent =
-        "Video completed! Opening the survey...";
-
-      // Brief delay lets the viewer see the completion message.
-      redirectTimer = setTimeout(() => {
-        window.location.href = FORM_URL;
-      }, 700);
-    }
-
-    function handleError(event) {
-      startButton.hidden = true;
-
-      status.textContent =
-        "Unable to load the video. Check the video ID, " +
-        "internet connection, and YouTube embedding settings.";
-
-      console.error("YouTube player error:", event.data);
+    function onPlayerError() {
+      document.getElementById("status").textContent =
+        "The video could not be played. Please check the video settings.";
     }
   </script>
 </body>
