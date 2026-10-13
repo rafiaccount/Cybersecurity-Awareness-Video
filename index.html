@@ -4,17 +4,22 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Video and Survey</title>
+
+  <title>Video Awareness Survey</title>
 
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       font-family: Arial, sans-serif;
       max-width: 850px;
       margin: 40px auto;
       padding: 20px;
-      text-align: center;
       background: #f5f7fa;
       color: #222;
+      text-align: center;
     }
 
     .container {
@@ -28,11 +33,19 @@
       width: 100%;
       aspect-ratio: 16 / 9;
       margin: 20px 0;
+      background: #000;
+      overflow: hidden;
     }
 
     #player {
       width: 100%;
       height: 100%;
+    }
+
+    #status {
+      color: #555;
+      font-size: 14px;
+      line-height: 1.5;
     }
 
     .button {
@@ -45,9 +58,18 @@
       margin-top: 12px;
     }
 
-    #status {
-      color: #555;
-      font-size: 14px;
+    .button:hover {
+      background: #0d50b5;
+    }
+
+    .button[hidden] {
+      display: none;
+    }
+
+    .notice {
+      color: #777;
+      font-size: 12px;
+      margin-top: 18px;
     }
   </style>
 </head>
@@ -55,43 +77,78 @@
 <body>
   <div class="container">
     <h1>Watch the Video</h1>
-    <p>Please watch the entire video. You will be
-       redirected to the survey when it finishes.</p>
+
+    <p>
+      Please watch the entire video.
+      You will be redirected to the survey when it finishes.
+    </p>
 
     <div class="video">
       <div id="player"></div>
     </div>
 
-    <p id="status">Press Play to begin.</p>
+    <p id="status" role="status" aria-live="polite">
+      Loading video...
+    </p>
 
-    <a id="surveyLink"
-       class="button"
-       href="#"
-       target="_blank"
-       rel="noopener noreferrer">
-      Open Survey Manually
+    <a
+      id="surveyLink"
+      class="button"
+      href="#"
+      target="_blank"
+      rel="noopener noreferrer"
+      hidden
+    >
+      Continue to Survey
     </a>
+
+    <p class="notice">
+      Please keep this page open until the video finishes.
+    </p>
   </div>
 
   <script>
-    // REPLACE THESE VALUES
-    const VIDEO_ID = "AsYi-MZeX6M";
-    const FORM_URL = "https://forms.cloud.microsoft/Pages/ResponsePage.aspx?id=HFv4cHjEkEOjr9j_PUzWOWxqva-6j9xOoZgzFkXAuSdUMUdaODk1QTI1WjFCM1lHVUhNVDNRSDRSSS4u";
+    // =========================================
+    // CONFIGURATION: REPLACE THESE TWO VALUES
+    // =========================================
 
-    document.getElementById("surveyLink").href = FORM_URL;
+    const VIDEO_ID = "YOUR_YOUTUBE_VIDEO_ID";
 
-    // Load YouTube's embedded player API
+    const FORM_URL = "YOUR_MICROSOFT_FORMS_URL";
+
+    // =========================================
+    // PLAYER STATE
+    // =========================================
+
+    let player = null;
+    let lastTime = 0;
+    let finished = false;
+    let progressCheck = null;
+    let playbackStarted = false;
+
+    const statusText = document.getElementById("status");
+    const surveyLink = document.getElementById("surveyLink");
+
+    surveyLink.href = FORM_URL;
+
+    // Load the YouTube IFrame Player API
     const tag = document.createElement("script");
     tag.src = "https://www.youtube.com/iframe_api";
     document.head.appendChild(tag);
 
-    let player;
+    // =========================================
+    // INITIALIZE YOUTUBE PLAYER
+    // =========================================
 
     function onYouTubeIframeAPIReady() {
       player = new YT.Player("player", {
         videoId: VIDEO_ID,
 
         playerVars: {
+          autoplay: 1,
+          controls: 0,
+          disablekb: 1,
+          fs: 0,
           playsinline: 1,
           rel: 0
         },
@@ -104,28 +161,118 @@
       });
     }
 
-    function onPlayerReady() {
-      document.getElementById("status").textContent =
-        "Ready! Press Play to start the video.";
+    // =========================================
+    // PLAYER READY
+    // =========================================
+
+    function onPlayerReady(event) {
+      event.target.mute();
+
+      statusText.textContent =
+        "Starting video. Please watch until the end.";
+
+      event.target.playVideo();
     }
+
+    // =========================================
+    // HANDLE PLAYBACK EVENTS
+    // =========================================
 
     function onPlayerStateChange(event) {
+      if (finished) return;
+
+      // Video is playing
       if (event.data === YT.PlayerState.PLAYING) {
-        document.getElementById("status").textContent =
-          "Video playing. The survey opens when it ends.";
+        playbackStarted = true;
+
+        statusText.textContent =
+          "Video playing. The survey will open when it finishes.";
+
+        startProgressCheck();
       }
 
-      if (event.data === YT.PlayerState.ENDED) {
-        document.getElementById("status").textContent =
-          "Video finished! Opening your survey...";
+      // Video paused or buffering
+      if (event.data === YT.PlayerState.PAUSED) {
+        statusText.textContent =
+          "Video paused. Resume playback to continue.";
+      }
 
-        window.location.href = FORM_URL;
+      if (event.data === YT.PlayerState.BUFFERING) {
+        statusText.textContent =
+          "Buffering video. Please wait...";
+      }
+
+      // Video ended normally
+      if (event.data === YT.PlayerState.ENDED) {
+        finishVideo();
       }
     }
 
-    function onPlayerError() {
-      document.getElementById("status").textContent =
-        "The video could not be played. Please check the video settings.";
+    // =========================================
+    // DISCOURAGE SEEKING FORWARD
+    // =========================================
+
+    function startProgressCheck() {
+      if (progressCheck !== null) return;
+
+      progressCheck = setInterval(() => {
+        if (!player || finished) return;
+
+        if (player.getPlayerState() !== YT.PlayerState.PLAYING) {
+          return;
+        }
+
+        const currentTime = player.getCurrentTime();
+
+        // Detect an unexpected forward jump.
+        // Small tolerance accommodates timing variations.
+        if (currentTime > lastTime + 2) {
+          player.seekTo(lastTime, true);
+        } else if (currentTime >= lastTime) {
+          lastTime = currentTime;
+        }
+      }, 500);
+    }
+
+    // =========================================
+    // VIDEO COMPLETED
+    // =========================================
+
+    function finishVideo() {
+      if (finished) return;
+
+      finished = true;
+
+      if (progressCheck !== null) {
+        clearInterval(progressCheck);
+        progressCheck = null;
+      }
+
+      statusText.textContent =
+        "Video completed! Opening the survey...";
+
+      // Keep a manual fallback available.
+      surveyLink.hidden = false;
+
+      // Redirect to Microsoft Forms.
+      window.location.replace(FORM_URL);
+    }
+
+    // =========================================
+    // HANDLE VIDEO ERRORS
+    // =========================================
+
+    function onPlayerError(event) {
+      if (progressCheck !== null) {
+        clearInterval(progressCheck);
+        progressCheck = null;
+      }
+
+      statusText.textContent =
+        "The video could not be played. Please reload the page or contact the organizer.";
+
+      // Do not redirect to the survey when playback fails.
+      console.error("YouTube player error:", event.data);
     }
   </script>
 </body>
