@@ -153,7 +153,6 @@
     // =====================================
 
     function onPlayerReady(event) {
-      event.target.mute();
       event.target.playVideo();
 
       status.textContent = "Attempting to start video...";
@@ -178,8 +177,8 @@
       if (!player || finished) return;
 
       startButton.hidden = true;
-
-      player.mute();
+      player.unMute();       // replaces player.mute()
+      player.setVolume(100);
       player.playVideo();
 
       status.textContent = "Starting video...";
