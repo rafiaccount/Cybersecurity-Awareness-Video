@@ -109,6 +109,7 @@
 
     let player;
     let finished = false;
+    let captionsSet = false;
 
     const status = document.getElementById("status");
     const startButton = document.getElementById("startButton");
@@ -206,15 +207,32 @@
         // Keep the survey hidden during playback.
         surveyLink.hidden = true;
 
-        // Force the caption track if the playerVars didn't stick.
+        // Pick the English caption track from the video's real track list,
+        // preferring en-US. Runs once so it won't override the viewer.
         // (Undocumented YouTube option, so it is wrapped in try/catch.)
-        try {
-          player.loadModule("captions");
-          player.setOption("captions", "track", {
-            languageCode: CAPTION_LANG
-          });
-        } catch (e) {
-          console.warn("Could not set caption track", e);
+        if (!captionsSet) {
+          captionsSet = true;
+
+          try {
+            player.loadModule("captions");
+
+            setTimeout(() => {
+              const tracks =
+                player.getOption("captions", "tracklist") || [];
+
+              const match =
+                tracks.find(t => t.languageCode === "en-US") ||
+                tracks.find(t => t.languageCode.startsWith("en"));
+
+              if (match) {
+                player.setOption("captions", "track", {
+                  languageCode: match.languageCode
+                });
+              }
+            }, 500);
+          } catch (e) {
+            console.warn("Could not set caption track", e);
+          }
         }
 
         status.textContent =
